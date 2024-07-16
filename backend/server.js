@@ -5,7 +5,7 @@ const express = require("express"),
 const bodyParser = require('body-parser');
 const fsPromises = require("fs").promises;
 const todoDBName = "tododb";
-const useCloudant = true;
+const useCloudant = false;
 
 //Init code for Cloudant
 const {CloudantV1} = require('@ibm-cloud/cloudant');
@@ -63,17 +63,56 @@ async function addItem (request, response) {
 //** week 6, get all items from the json database*/
 app.get("/get/items", getItems)
 async function getItems (request, response) {
+    //begin here
+
+    //begin cloudant here
+    if (useCloudant) {
+    //add for cloudant client
+    const client = CloudantV1.newInstance({});
+    var listofdocs;
+    await client.postAllDocs({
+        db: todoDBName,
+        includeDocs: true
+    }).then(response => {
+        listofdocs=response.result;
+        });
+    response.json(JSON.stringify(listofdocs));
+    }
+    else {
+    //for non-cloudant use-case
     var data = await fsPromises.readFile("database.json");
     response.json(JSON.parse(data));
+    }
+
 };
 
 //** week 6, search items service */
 app.get("/get/searchitem", searchItems) 
 async function searchItems (request, response) {
+    //begin here
     var searchField = request.query.taskname;
+
+    if (useCloudant){
+        const client = CloudantV1.newInstance({});
+        var search_results
+        await client.postSearch({
+            db: todoDBName,
+            ddoc: 'newdesign',
+            query: 'task:'+searchField,
+            index: 'newSearch'
+          }).then(response => {
+            search_results=response.result;
+            console.log(response.result);
+          });
+        console.log(search_results);
+        response.json(JSON.stringify(search_results));
+        
+    }
+    else {
     var json = JSON.parse (await fsPromises.readFile("database.json"));
     var returnData = json.filter(jsondata => jsondata.Task === searchField);
     response.json(returnData);
+    }
 };
 
 
