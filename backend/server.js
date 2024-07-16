@@ -7,9 +7,12 @@ const fsPromises = require("fs").promises;
 const todoDBName = "tododb";
 const useCloudant = false;
 
-
-
 //Init code for Cloudant
+const {CloudantV1} = require('@ibm-cloud/cloudant');
+if (useCloudant)
+{
+    initDB();
+}
 
 //Initialize backend
 app.use(cors());
@@ -62,15 +65,80 @@ app.get("/get/items", getItems)
 async function getItems (request, response) {
     //begin here
 
+    //begin cloudant here
+    if (useCloudant) {
+    //add for cloudant client
+    const client = CloudantV1.newInstance({});
+    var listofdocs;
+    await client.postAllDocs({
+        db: todoDBName,
+        includeDocs: true
+    }).then(response => {
+        listofdocs=response.result;
+        });
+    response.json(JSON.stringify(listofdocs));
+    }
+    else {
+    //for non-cloudant use-case
+    var data = await fsPromises.readFile("database.json");
+    response.json(JSON.parse(data));
+    }
+
 };
 
 //** week 6, search items service */
 app.get("/get/searchitem", searchItems) 
 async function searchItems (request, response) {
     //begin here
+    var searchField = request.query.taskname;
 
+    if (useCloudant){
+        const client = CloudantV1.newInstance({});
+        var search_results
+        await client.postSearch({
+            db: todoDBName,
+            ddoc: 'newdesign',
+            query: 'task:'+searchField,
+            index: 'newSearch'
+          }).then(response => {
+            search_results=response.result;
+            console.log(response.result);
+          });
+        console.log(search_results);
+        response.json(JSON.stringify(search_results));
+        
+    }
+    else {
+    var json = JSON.parse (await fsPromises.readFile("database.json"));
+    var returnData = json.filter(jsondata => jsondata.Task === searchField);
+    response.json(returnData);
+    }
 };
 
 
 // Add initDB function here
+async function initDB ()
+{
+    //TODO --- Insert to create DB
+    //See example at https://www.npmjs.com/package/@ibm-cloud/cloudant#authentication-with-environment-variables for how to create db
+    
+    try {
+        const todoDBName = "tododb";
+        const client = CloudantV1.newInstance({});
+        const putDatabaseResult = (
+        await client.putDatabase({
+        db: todoDBName,
+      })
+    ).result;
+    if (putDatabaseResult.ok) {
+      console.log(`"${todoDBName}" database created.`);
+    }
+  } catch (err) {
+   
+      console.log(
+        `Cannot create "${todoDBName}" database, err: "${err.message}".`
+      );
+
+  }
+};
 
